@@ -1,16 +1,13 @@
 #!/usr/bin/python3.6
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy
-import scipy.sparse.linalg as linalgSP
-from scipy.sparse import hstack, vstack
 
 import boundary
 import config
 import discretizationUtils as grid
 import kernels
 
-config.ny = 5
+config.ny = 11
 config.nx = config.ny * 2
 config.dy = 1
 config.dx = 1
@@ -22,8 +19,8 @@ dx = config.dx
 
 sqrt_ra = 7
 
-Tbottom = 50
-Ttop = 25
+Tbottom = 1
+Ttop = 0
 
 # Initial conditions
 startT = np.expand_dims(np.linspace(0, 1, ny), 1).repeat(nx, axis=1)
@@ -75,29 +72,22 @@ currentT = startT
 
 currentSol = np.concatenate((currentPsi, currentT))
 
-# Once
-A = laplaceMatPsi
-B = sqrt_ra * dxMatT
-topRHS = laplaceVecPsi + dxVecT
 
-# Redo
-psi_x = (dxMatPsi @ currentPsi).repeat(nx * ny, axis=1)
-psi_y = (dyMatPsi @ currentPsi).repeat(nx * ny, axis=1)
+dt = 0.5
+dT = laplaceMatT @ currentT + laplaceVecT - sqrt_ra * (
+        np.multiply( (dyMatPsi @ currentPsi + dyVecPsi), (dxMatT @ currentT + dxVecT) )
+        -
+        np.multiply( (dxMatPsi @ currentPsi + dxVecPsi), (dyMatT @ currentT + dyVecT) )
+)
 
-C = laplaceMatT + sqrt_ra * (np.multiply(psi_y, dxMatT.todense().A) - np.multiply(psi_x, dyMatT.todense().A))
-botRHS = laplaceVecT + sqrt_ra * (dxVecT - dyVecT)
+nextT = currentT + dT * dt
 
-top = hstack((A, B))
-bot = hstack((scipy.sparse.dok_matrix((nx * ny, nx * ny), dtype='float'), C))
+currentT[2] = 2
 
-tot = vstack((top, bot))
-
-inverse = linalgSP.inv(scipy.sparse.csc_matrix(tot))
-
-plt.matshow(tot.todense().A)
+plt.matshow(grid.vecToField(currentT))
 plt.colorbar()
 plt.show()
 
-plt.matshow(inverse.todense().A)
+plt.matshow(grid.vecToField(dyMatT @ currentT + dyVecT[::-1]))
 plt.colorbar()
 plt.show()
