@@ -4,6 +4,7 @@ import scipy.sparse as sparse
 
 
 def dyOp(nx, ny):
+    # TODO
     dy = config.dy
 
     plus1 = np.ones((ny,))
@@ -23,13 +24,41 @@ def dyOp(nx, ny):
     return sparse.csr_matrix(sparse.diags([plus1[:-1], mid, min1[:-1]], [1, 0, -1]) / (2.0 * dy))
 
 
+def dyOpTemp(nx, ny, bcDirArray):
+    # Seems to work
+    dy = config.dy
+
+    rhs = np.zeros((nx * ny,))
+    for i in range(nx):
+        rhs[0 + ny * i] = bcDirArray[1] / dy  # y = 0
+        rhs[ny * (i + 1) - 1] = - bcDirArray[0] / dy  # y = ymax
+    rhs = np.expand_dims(rhs, 1)  # Make it an explicit column vector
+
+    plus1 = np.ones((ny,))
+    plus1[-1] = 0
+    plus1[0] = 2
+    mid = np.zeros((ny,))
+    # mid[0] = -2
+    # mid[-1] = 2
+    min1 = -np.ones((ny,))
+    min1[-1] = 0
+    min1[-2] = -2
+
+    plus1 = np.tile(plus1, (nx,))
+    mid = np.tile(mid, (nx,))
+    min1 = np.tile(min1, (nx,))
+
+    return sparse.csr_matrix(sparse.diags([plus1[:-1], mid, min1[:-1]], [1, 0, -1]) / (2.0 * dy)), rhs
+
+
 def dxOpTemp(nx, ny, bcNeuArray):
-    # TODO
+    # Seems to work
     dx = config.dx
 
-    rhs = np.zeros((nx*ny,))
+    rhs = np.zeros((nx * ny,))
     rhs[0:ny] = - bcNeuArray[0]
     rhs[-ny:] = - bcNeuArray[1]
+    rhs = np.expand_dims(rhs, 1)  # Make it an explicit column vector
 
     plus1 = np.ones((ny,))
     mid = np.zeros((ny,))
@@ -41,12 +70,12 @@ def dxOpTemp(nx, ny, bcNeuArray):
     mid = np.tile(mid, (nx,))
 
     min1 = np.tile(min1, (nx - 1,))
-    min1[-ny:-1] = 0
+    min1[-ny:] = 0
 
-    return sparse.csr_matrix(sparse.diags([plus1[:-1], mid, min1[:-1]], [ny, 0, -ny]) / (2.0 * dx)),rhs
+    return sparse.csr_matrix(sparse.diags([plus1[:], mid, min1[:]], [ny, 0, -ny]) / (2.0 * dx)), rhs
+
 
 def dxOpStream(nx, ny):
-    # TODO
     dx = config.dx
 
     plus1 = np.ones((ny,))
@@ -58,12 +87,12 @@ def dxOpStream(nx, ny):
 
     mid = np.tile(mid, (nx,))
     mid[0:ny] = -2
-    mid[-ny:-1] = 2
+    mid[-ny:] = 2
 
     min1 = np.tile(min1, (nx - 1,))
-    min1[-ny:-1] = -2
+    min1[-ny:] = -2
 
-    return sparse.csr_matrix(sparse.diags([plus1[:-1], mid, min1[:-1]], [ny, 0, -ny]) / (2.0 * dx))
+    return sparse.csr_matrix(sparse.diags([plus1[:], mid, min1[:]], [ny, 0, -ny]) / (2.0 * dx))
 
 
 def dlOpStream(nx, ny):
@@ -114,10 +143,12 @@ def dlOpStream(nx, ny):
 
 
 def dlOpTemp(nx, ny, bcDirArray, bcNeuArray):
+    # TODO
     # Streamline Laplace operator
     dx = config.dx
     dy = config.dy
 
+    # TODO dit is nog niet helemaal okkk
     rhs = np.zeros((ny * nx))
     for i in range(nx):
         rhs[0 + ny * i] = bcDirArray[0]
