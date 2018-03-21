@@ -27,7 +27,9 @@ def index1to2x(k):
 
 
 def fieldToVec(field):
-    return np.ravel(field, order='F')
+    vec = np.ravel(field, order='F')
+    vec.shape = (vec.size, 1)
+    return vec
 
 
 def vecToField(vec):
