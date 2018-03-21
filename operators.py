@@ -76,7 +76,7 @@ def dyOpTemp(bcDirArray):
     min1 = np.tile(min1, (nx,))
 
     # Construct a sparse matrix from diagonals
-    A = sparse.csr_matrix(sparse.diags([plus1[:-1], mid, min1[:-1]], [1, 0, -1]) / (2.0 * dy)), rhs
+    A = sparse.csr_matrix(sparse.diags([plus1[:-1], mid, min1[:-1]], [1, 0, -1]) / (2.0 * dy))
 
     return A, rhs
 
@@ -94,7 +94,6 @@ def dxOpTemp(bcNeuArray):
     ny = config.ny
     dx = config.dx
 
-    # TODO Check this
     rhs = np.zeros((nx * ny,))
     rhs[0:ny] = - bcNeuArray[0]
     rhs[-ny:] = - bcNeuArray[1]
@@ -178,19 +177,22 @@ def dlOpTemp(bcDirArray, bcNeuArray):
     min1x = np.tile(min1x, (nx - 1,))
     min1x[-ny:] = 2 / (dx ** 2)
 
-    A = np.diag(mid) + np.diag(min1y, -1) + np.diag(plus1y, 1) + np.diag(plus2y, 2) + np.diag(min2y, -2) \
-        + np.diag(plus1x, ny) + np.diag(min1x, -ny)
+    A = sparse.csr_matrix(sparse.diags([min1x, min2y, min1y, mid, plus1y, plus2y, plus1x], [-ny, -2, -1, 0, 1, 2, ny]))
+
+    toKeep = np.ones((nx * ny,))
 
     # Now we need to construct the RHS for the Dirichlet points
     for ix in range(nx):
-        rhsPart = A[:, ix * ny] * bcDirArray[0]
+        rhsPart = (A[:, ix * ny] * bcDirArray[0]).todense().A
         rhsPart.shape = (nx * ny, 1)
         rhs = rhs - np.copy(rhsPart)
-        A[:, ix * ny] = 0
-        rhsPart = A[:, (ix + 1) * ny - 1] * bcDirArray[1]
+        toKeep[ix * ny] = 0
+        rhsPart = (A[:, (ix + 1) * ny - 1] * bcDirArray[1]).todense().A
         rhsPart.shape = (nx * ny, 1)
         rhs = rhs - np.copy(rhsPart)
-        A[:, (ix + 1) * ny - 1] = 0
+        toKeep[(ix + 1) * ny - 1] = 0
+
+    A = sparse.csr_matrix(sparse.diags(toKeep, 0)) @ A
 
     return A, rhs
 
