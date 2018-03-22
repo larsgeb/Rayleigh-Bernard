@@ -4,7 +4,6 @@ import config
 
 
 def index2to1(y, x):
-    # TODO implement warnings outside of range
     nx = config.nx
     ny = config.ny
 
@@ -15,14 +14,22 @@ def index2to1(y, x):
 
 
 def index1to2y(k):
-    # TODO implement warnings outside of range
     ny = config.ny
+    nx = config.nx
+
+    if (k > nx * ny - 1 or k < 0):
+        raise (IndexError)
+
     return int(k % ny)
 
 
 def index1to2x(k):
-    # TODO implement warnings outside of range
     ny = config.ny
+    nx = config.nx
+
+    if (k > nx * ny - 1 or k < 0):
+        raise (IndexError)
+
     return int(k / ny)
 
 
