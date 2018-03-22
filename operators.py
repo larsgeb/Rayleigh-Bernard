@@ -197,86 +197,6 @@ def dlOpTemp(bcDirArray, bcNeuArray):
     return A, rhs
 
 
-# def dlOpTempLegacy(bcDirArray, bcNeuArray):
-#     # TODO
-#     # Streamline Laplace operator
-#     nx = config.nx
-#     ny = config.ny
-#     dx = config.dx
-#     dy = config.dy
-#
-#     rhs = np.zeros((nx * ny,))
-#     rhs.shape = (nx * ny, 1)
-#
-#     mid = -2 * np.ones((ny,)) / (dy ** 2) - 2 * np.ones((ny,)) / (dx ** 2)
-#     mid[0] = 0
-#     mid[-1] = 0
-#     mid = np.tile(mid, (nx,))
-#     # These are the one-sided differences for d²T/dx²
-#     mid[1:ny - 1] = -2 / (dy ** 2) - 1 / (2 * dx ** 2)
-#     mid[-ny + 1:-1] = -2 / (dy ** 2) - 1 / (2 * dx ** 2)
-#
-#     plus1x = np.ones((ny,)) / (dx ** 2)
-#     plus1x[0] = 0
-#     plus1x[-1] = 0
-#     plus1x = np.tile(plus1x, (nx - 1,))
-#     plus1x[0:ny] = 0
-#
-#     min1x = np.ones((ny,)) / (dx ** 2)
-#     min1x[0] = 0
-#     min1x[-1] = 0
-#     min1x = np.tile(min1x, (nx - 1,))
-#     min1x[-ny:] = 0
-#     # Associated RHS
-#     rhs[ny::ny] = -bcDirArray[0] / (dx ** 2)
-#     rhs[ny +::ny] = -bcDirArray[0] / (dx ** 2)
-#
-#     # Check
-#     plus2x = np.zeros((ny,))
-#     plus2x = np.tile(plus2x, (nx - 2,))
-#     plus2x[1:ny - 1] = 1 / (2 * dx ** 2)
-#     # Associated RHS
-#     rhs[1:ny - 1] = rhs[1:ny - 1] + bcNeuArray[0] / dx
-#
-#     # Check
-#     min2x = np.zeros((ny,))
-#     min2x = np.tile(min2x, (nx - 2,))
-#     min2x[-ny:] = 1 / (2 * dx ** 2)
-#     # Associated RHS
-#     rhs[-ny + 1:-1] = rhs[-ny + 1:-1] - bcNeuArray[1] / dx
-#
-#     min1y = np.ones((ny,)) / (dy ** 2)
-#     min1y[0] = 0  # Dirichlet
-#     min1y[-2] = -2 / (dy ** 2)  # One-side difference
-#     min1y[-1] = 0  # Not part of current column
-#     min1y = np.tile(min1y, (nx,))[0:-1]
-#     # Associated RHS
-#     rhs[1::ny] = rhs[1::ny] - bcDirArray[0] / (dy ** 2)
-#
-#     plus1y = np.ones((ny,)) / (dy ** 2)
-#     plus1y[0] = -2 / (dy ** 2)  # One-side difference
-#     plus1y[-2] = 0  # Dirichlet
-#     plus1y[-1] = 0  # Not part of current column
-#     plus1y = np.tile(plus1y, (nx,))[0:-1]
-#     # Associated RHS
-#     rhs[ny - 2::ny] = rhs[ny - 2::ny] - bcDirArray[1] / (dy ** 2)
-#
-#     min2y = np.zeros((ny,))
-#     min2y[1] = 1 / (dy ** 2)
-#     min2y = np.tile(min2y, (nx,))[0:-2]
-#
-#     plus2y = np.zeros((ny,))
-#     plus2y[0] = 1 / (dy ** 2)
-#     plus2y = np.tile(plus2y, (nx,))[0:-2]
-#
-#     A = np.diag(mid) + np.diag(min1y, -1) + np.diag(min2y, -2) + np.diag(plus1y, 1) + np.diag(plus2y, 2) + np.diag(
-#         plus1x, ny) + np.diag(
-#         min1x, -ny) + \
-#         np.diag(plus2x, ny * 2) + np.diag(min2x, -ny * 2)
-#
-#     return A, rhs
-
-
 # Streamfunction operators
 def dxOpStream():
     """Create discrete operator on 2d grid for dPsi / dx using central and one-side difference formulas. The one-sided
@@ -396,4 +316,4 @@ def dlOpStreamMod():
     mid[0:ny] = 1
     mid[-ny:-1] = 1
 
-    return sparse.csr_matrix(sparse.diags([mid, plus1y, min1y, plus1x, min1x], [0, 1, -1, ny, -ny]))
+    return sparse.csc_matrix(sparse.diags([mid, plus1y, min1y, plus1x, min1x], [0, 1, -1, ny, -ny]))
