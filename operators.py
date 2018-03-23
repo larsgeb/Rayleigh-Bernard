@@ -56,7 +56,7 @@ def dyOpTemp(bcDirArray):
     rhs = np.zeros((nx * ny,))
     for i in range(nx):
         rhs[0 + ny * i] = bcDirArray[0] / dy  # y = 0
-        rhs[ny * (i + 1) - 1] = - bcDirArray[1] / dy  # y = ymax
+        rhs[ny * (i + 1) - 1] = -  bcDirArray[1] / dy  # y = ymax
     rhs = np.expand_dims(rhs, 1)  # Make it an explicit column vector
 
     # We use the central difference formula for all the inner derivatives ...
@@ -145,10 +145,13 @@ def dlOpTemp(bcDirArray, bcNeuArray):
     rhs[0:ny] = bcNeuArray[0] / (0.5 * dx)
     rhs[-ny:] = -bcNeuArray[1] / (0.5 * dx)
 
+    # Now we generate all the diagonals. Plus/min <number> x/y stands for placement in the 2D grid. Dirichlet conditions
+    # are handled later.
+
     # Two sided difference formula for d/dy to next point
     plus1y = np.ones((ny,)) / (dy ** 2)
     plus1y[0] = -2 / (dy ** 2)  # one sided
-    plus1y[ny - 1] = 0  # not part of the scheme
+    plus1y[-1] = 0  # not part of the scheme
     plus1y = np.tile(plus1y, (nx,))
     plus1y = plus1y[:-1]
 
@@ -192,7 +195,7 @@ def dlOpTemp(bcDirArray, bcNeuArray):
         rhs = rhs - np.copy(rhsPart)
         toKeep[(ix + 1) * ny - 1] = 0
 
-    A = sparse.csr_matrix(sparse.diags(toKeep, 0)) @ A
+    A = A @ sparse.csr_matrix(sparse.diags(toKeep, 0)) # Deleting Dirichlet columns
 
     return A, rhs
 

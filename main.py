@@ -1,5 +1,6 @@
 #!/usr/bin/python3.6
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import numpy as np
 import scipy.sparse as sparse
 import scipy.sparse.linalg
@@ -7,16 +8,15 @@ import discretizationUtils as grid
 import config as config
 import operators as op
 import matrices
-import matplotlib.animation as animation
 import time
 
 # --- Setup; using the config as a 'global variable module' --- #
 config.dt = 0.001
-config.nt = 1500
+config.nt = 3000
 config.ny = 20
-config.nx = 30
+config.nx = 40
 config.dy = 1 / (config.ny - 1)
-config.dx = 1 / (config.ny - 1)
+config.dx = 2 / (config.ny - 1)
 
 dt = config.dt
 nt = config.nt
@@ -32,19 +32,17 @@ Ttop = 0
 tempDirichlet = [Tbottom, Ttop]
 tempNeumann = [0, 0]
 
-# Takes a long time!
-generateAnimation = True
-generateEvery = 20
-# Speeds up!
-useSuperLUFactorizationEq1 = True
-useSuperLUFactorizationEq2 = True
-
+generateAnimation = True  # Takes a long time!
+generateEvery = 100
+generateFinal = False
+useSuperLUFactorizationEq1 = True  # doesn't do much as it needs to be done every loop
+useSuperLUFactorizationEq2 = True  # Speeds up!
+quiverEveryNPoints = 1
 # ---  No modifications below this point! --- #
 
 # Initial conditions
 startT = np.expand_dims(np.linspace(Tbottom, Ttop, ny), 1).repeat(nx, axis=1)
-# startT[1:4, 9:11] = 1.1
-# startT[1:4, 29:31] = 1.1
+startT[2, int(nx / 2 - 1):int(nx / 2)] = 0.5
 startT = grid.fieldToVec(startT)
 startPsi = np.expand_dims(np.zeros(ny), 1).repeat(nx, axis=1)  # start with zeros for streamfunctions
 startPsi = grid.fieldToVec(startPsi)
@@ -70,31 +68,41 @@ psiNonDirichlet = sparse.csc_matrix(sparse.diags(psiNonDirichlet, 0))
 if (generateAnimation):
     # Set up for animation
     fig = plt.figure(figsize=(8.5, 5), dpi=300)
-    Writer = animation.writers['ffmpeg']
-    writer = Writer(fps=30, metadata=dict(artist='Lars Gebraad'), bitrate=5000)
-    ims = []
+    gs = gridspec.GridSpec(3, 2)
+    gs.update(wspace=0.5, hspace=0.75)
+    ax1 = plt.subplot(gs[0:2, :], )
+    ax2 = plt.subplot(gs[2, 0])
+    ax3 = plt.subplot(gs[2, 1])
 else:
     fig = plt.figure(figsize=(8.5, 5), dpi=600)
 
 # -- Preconditioning -- #
 if (useSuperLUFactorizationEq1):
     start = time.time()
-    factor1 = sparse.linalg.factorized(dlOpPsi)  # Makes LU decomposition.
+    # Makes LU decomposition.
+    factor1 = sparse.linalg.factorized(dlOpPsi)
     end = time.time()
-    print("Runtime of LU factorization for eq-1: ", end - start, "seconds")
+    print("Runtime of LU factorization for eq-1: %.2e seconds" % (end - start))
 
 # Set up initial
 Tnplus1 = startT
 Psinplus1 = startPsi
 
-start = time.time()
+# initialize accumulators
+t = []
+maxSpeedArr = []
+heatFluxConductionArr = []
+heatFluxAdvectionArr = []
+totalHeatFluxArr = []
+
 # Integrate in time
+start = time.time()
 print("Starting time marching for", nt, "steps ...")
-t = [0]
 for it in range(nt):
-    # if(it == 20):
-        # dt = dt*10
-    t.append(t[-1] + dt)
+    if it == 0:
+        t.append(dt)
+    else:
+        t.append(t[-1] + dt)
     Tn = Tnplus1
     Psin = Psinplus1
 
@@ -105,8 +113,7 @@ for it in range(nt):
 
     # Solve for Tn+1
     if (useSuperLUFactorizationEq2):
-        factor2 = sparse.linalg.factorized(
-            sparse.csc_matrix(sparse.eye(nx * ny) + (dt / 2) * C))  # Makes LU decomposition.
+        factor2 = sparse.linalg.factorized(sparse.csc_matrix(sparse.eye(nx * ny) + (dt / 2) * C))
         Tnplus1 = factor2(dt * rhsC + (sparse.eye(nx * ny) - (dt / 2) * C) @ Tn)
     else:
         Tnplus1 = sparse.linalg.spsolve(sparse.eye(nx * ny) + (dt / 2) * C,
@@ -114,7 +121,6 @@ for it in range(nt):
 
     # Enforcing column vector
     Tnplus1.shape = (nx * ny, 1)
-
     # Enforcing Dirichlet
     Tnplus1[0::ny] = Tbottom
     Tnplus1[ny - 1::ny] = Ttop
@@ -132,34 +138,73 @@ for it in range(nt):
     Psinplus1[0:ny] = 0
     Psinplus1[-ny:] = 0
 
-    if (it % generateEvery == 0):
+    if ((it) % generateEvery == 0):
         if (generateAnimation):
+            # Calculate speeds
             ux = grid.vecToField(dyOpPsi @ Psinplus1)
-            uy = grid.vecToField(dxOpPsi @ Psinplus1)
+            uy = -grid.vecToField(dxOpPsi @ Psinplus1)
             maxSpeed = np.max(np.square(ux) + np.square(uy))
-            plt.quiver(np.flipud(ux), -np.flipud(uy))
-            im = plt.imshow(np.flipud(grid.vecToField(Tnplus1)), vmin=0, aspect=1, cmap=plt.get_cmap('magma'), vmax=2)
-            clrbr = plt.colorbar()
-            plt.tight_layout()
-            plt.title("t: %.2f, it: %i, Maximum speed: %.2f" % (t[-1], it, maxSpeed))
+            maxSpeedArr.append(maxSpeed)
+
+            # Calculate heat fluxes
+            heatFluxConduction = np.sum(- grid.vecToField(dyOpTemp @ Tnplus1 - rhsDyOpTemp)[-10, :])
+            heatFluxAdvection = sqrtRa * uy[-10, :] @ grid.vecToField(Tnplus1)[-10, :]
+            totalHeatFlux = heatFluxAdvection + heatFluxConduction
+
+            heatFluxConductionArr.append(heatFluxConduction)
+            heatFluxAdvectionArr.append(heatFluxAdvection)
+            totalHeatFluxArr.append(totalHeatFlux)
+
+            # Plot the results
+            # Velocity and temperature field
+            ax1.quiver(np.linspace(0, 2, int(nx / quiverEveryNPoints)), np.linspace(0, 1, int(ny / quiverEveryNPoints)),
+                       ux[::quiverEveryNPoints, ::quiverEveryNPoints], uy[::quiverEveryNPoints, ::quiverEveryNPoints])
+            im = ax1.imshow((grid.vecToField(Tnplus1)), vmin=0, extent=[0, 2, 0, 1], aspect=1,
+                            cmap=plt.get_cmap('magma'),
+                            vmax=1, origin='lower')
+            clrbr = plt.colorbar(im, ax=ax1)
+            ax1.set_xlabel("x [distance]")
+            ax1.set_ylabel("y [distance]")
+            # ax1.title("t: %.2f, it: %i, Maximum speed: %.2e" % (t[-1], it, maxSpeed))
+
+            # Maximum fluid velocity
+            ax2.semilogy(t[::generateEvery], maxSpeedArr)
+            ax2.legend(['Maximum fluid velocity'], fontsize=5, loc='lower right')
+            ax2.set_xlabel("t [time]")
+            ax2.set_ylabel("max V [speed]")
+            ax2.set_xlim([0, (nt - generateEvery) * dt])
+            ymax = 10
+            ax2.set_ylim([1e-5, ymax if maxSpeed < ymax else maxSpeed])  # ternary statement, cool stuff
+
+            # Heat fluxes
+            ax3.plot(t[::generateEvery], heatFluxAdvectionArr)
+            ax3.plot(t[::generateEvery], heatFluxConductionArr)
+            ax3.plot(t[::generateEvery], totalHeatFluxArr, linestyle=':')
+            ax3.legend(['Advective heat flux', 'Conductive heat flux', 'Total heat flux'], fontsize=5,
+                       loc='center left')
+            ax3.set_xlabel("t [time]")
+            ax3.set_ylabel("q [heat flux]")
+            ax3.set_xlim([0, (nt - generateEvery) * dt])
+            ymax = totalHeatFluxArr[0] * 1.3
+            ax3.set_ylim([0, ymax if totalHeatFlux < ymax else totalHeatFlux * 1.1])
+
+            ax1.set_title("Temperature and velocity field", FontSize=7)
+            ax2.set_title("Maximum fluid velocity over time", FontSize=7)
+            ax3.set_title("Heat fluxes over time", FontSize=7)
+
+            # Plot and redo!
             plt.savefig("fields/field%i.png" % (it / generateEvery))
-            plt.gca().clear()
             clrbr.remove()
-            # ims.append([im])
+            ax1.clear()
+            ax2.clear()
+            ax3.clear()
         print("time step:", it, end='\r')
 
 end = time.time()
 print("Runtime of time-marching: ", end - start, "seconds")
 
 # And output figure(s)
-if (generateAnimation):
-    # ani = animation.ArtistAnimation(fig, ims, interval=10, blit=True, repeat_delay=0)
-    # plt.colorbar()
-    # plt.tight_layout()
-    # plt.title("Maximum speed: %.2f" % maxSpeed)
-    # ani.save('animation.mp4', writer=writer)
-    a = 1
-else:
+if (generateFinal):
     ux = grid.vecToField(dyOpPsi @ Psinplus1)
     uy = grid.vecToField(dxOpPsi @ Psinplus1)
     maxSpeed = np.max(np.square(ux) + np.square(uy))
