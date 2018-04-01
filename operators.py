@@ -54,9 +54,9 @@ def dyOpTemp(bcDirArray):
 
     # First construct the right hand side from one-sided difference formulas for y = 0 & y = ymax and the Dirichlet BC.
     rhs = np.zeros((nx * ny,))
-    for i in range(nx):
-        rhs[0 + ny * i] = bcDirArray[0] / dy  # y = 0
-        rhs[ny * (i + 1) - 1] = -  bcDirArray[1] / dy  # y = ymax
+    for ix in range(nx):
+        rhs[0 + ny * ix] = bcDirArray[0][ix] / dy  # y = 0
+        rhs[ny * (ix + 1) - 1] = -  bcDirArray[1][ix] / dy  # y = ymax
     rhs = np.expand_dims(rhs, 1)  # Make it an explicit column vector
 
     # We use the central difference formula for all the inner derivatives ...
@@ -186,11 +186,11 @@ def dlOpTemp(bcDirArray, bcNeuArray):
 
     # Now we need to construct the RHS for the Dirichlet points
     for ix in range(nx):
-        rhsPart = (A[:, ix * ny] * bcDirArray[0]).todense().A
+        rhsPart = (A[:, ix * ny] * bcDirArray[0][ix]).todense().A
         rhsPart.shape = (nx * ny, 1)
         rhs = rhs - np.copy(rhsPart)
         toKeep[ix * ny] = 0
-        rhsPart = (A[:, (ix + 1) * ny - 1] * bcDirArray[1]).todense().A
+        rhsPart = (A[:, (ix + 1) * ny - 1] * bcDirArray[1][ix]).todense().A
         rhsPart.shape = (nx * ny, 1)
         rhs = rhs - np.copy(rhsPart)
         toKeep[(ix + 1) * ny - 1] = 0
@@ -269,7 +269,7 @@ def dyOpStream():
 
 def dlOpStreamMod():
     """Create discrete operator on 2d grid for d²Psi / dy² using central and Dirichlet boundary conditions. It is not
-    the traditional operator, as some entries are modified to simplify the solving of equation 1 from the project.
+    the traditional operator, as some entri=es are modified to simplify the solving of equation 1 from the project.
 
         Status: finished on 21 March.
 

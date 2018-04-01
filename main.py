@@ -11,12 +11,12 @@ import matrices
 import time
 
 # --- Setup; using the config as a 'global variable module' --- #
-config.dt = 0.01
-config.nt = 3000
-config.ny = 20
-config.nx = 40
-config.dy = 1 / (config.ny - 1)
-config.dx = 2 / (config.ny - 1)
+config.ny = 40
+config.nx = 80
+config.dy = 1.0 / (config.ny)
+config.dx = 2.0 / (config.nx)
+config.dt = 0.001
+config.nt = int(0.5 / config.dt)
 dt = config.dt
 nt = config.nt
 ny = config.ny
@@ -29,28 +29,37 @@ useSuperLUFactorizationEq1 = True  # doesn't do much as it needs to be done ever
 useSuperLUFactorizationEq2 = True  # Speeds up, quite a bit!
 
 # Physical parameters (stream potential is 0 on all boundaries, hardcoded).
-sqrtRa = 7
+sqrtRa = 14
 Tbottom = 1
 Ttop = 0
-tempDirichlet = [Tbottom, Ttop]
+tempDirichlet = np.array([np.ones((nx,)) * Tbottom, np.ones((nx,)) * Ttop])
 tempNeumann = [0, 0]
+
+# Use initial instability (also changes nt to 3000)
+instability = True
 
 # Plotting settings
 generateAnimation = True
 generateEvery = 10
 generateFinal = False
-qInt = 1  # What's the quiver vector interval? Want to plot every vector?
-qScale = 20  # Scale the vectors?
+qInt = 4  # What's the quiver vector interval? Want to plot every vector?
+qScale = 40  # Scale the vectors?
+
 # ---  No modifications below this point! --- #
 
-print("Buoyancy driven flow:\nRayleigh number: %.2f\ndt: %.2f\nnt: %.2f\ndx/dy: %.2f" % (sqrtRa * sqrtRa, dt, nt, dx))
+assert (dx == dy)
 
 # Initial conditions
 startT = np.expand_dims(np.linspace(Tbottom, Ttop, ny), 1).repeat(nx, axis=1)
-startT[2:3, int(nx / 2 - 1):int(nx / 2 + 1)] = 0.5
+if instability:
+    startT[int(ny / 2 - 3):int(ny / 2 + 3), int(nx / 2 - 3):int(nx / 2 + 3)] = 1.0
 startT = grid.fieldToVec(startT)
 startPsi = np.expand_dims(np.zeros(ny), 1).repeat(nx, axis=1)  # start with zeros for streamfunctions
 startPsi = grid.fieldToVec(startPsi)
+
+print("Buoyancy driven flow:\nRayleigh number: %.2f\ndt: %.2e\nnt: %i\ndx: %.2e\ndy: %.2e" % (
+    sqrtRa * sqrtRa, dt, nt, dx, dy))
+print("Critical CFL velocity: %.2e" % (dx / dt))
 
 # Generate operators for differentials
 dyOpPsi = op.dyOp()
@@ -120,8 +129,8 @@ for it in range(
             maxSpeedArr.append(maxSpeed)
 
             # calculate heat fluxes
-            heatFluxConduction = np.sum(- grid.vecToField(dyOpTemp @ Tnplus1 - rhsDyOpTemp)[-10, :])
-            heatFluxAdvection = sqrtRa * uy[-10, :] @ grid.vecToField(Tnplus1)[-10, :]
+            heatFluxConduction = np.sum(- grid.vecToField(dyOpTemp @ Tnplus1 - rhsDyOpTemp)[int(ny / 2), :])
+            heatFluxAdvection = sqrtRa * uy[int(ny / 2), :] @ grid.vecToField(Tnplus1)[int(ny / 2), :]
             totalHeatFlux = heatFluxAdvection + heatFluxConduction
 
             # accumulate values
@@ -141,7 +150,8 @@ for it in range(
 
             # plot maximum fluid velocity
             ymax = 10
-            ax2.set_ylim([1e-5, ymax if maxSpeed < ymax else maxSpeed])  # ternary statement, cool stuff
+            ax2.set_ylim([1e-5, ymax if np.max(maxSpeedArr) * (10 ** 0.1) < ymax else np.max(maxSpeedArr) * (
+                    10 ** 0.1)])  # ternary statement, cool stuff
             ax2.semilogy(t[::generateEvery], maxSpeedArr)
             cflV = dx / dt
             ax2.semilogy([0, nt * dt], [cflV, cflV], linestyle=":")
@@ -160,21 +170,21 @@ for it in range(
             ax3.set_ylabel("q [heat flux]")
             ax3.set_xlim([0, nt * dt])
             ymax = totalHeatFluxArr[0] * 1.3
-            ax3.set_ylim([0, ymax if totalHeatFlux < ymax else totalHeatFlux * 1.1])
+            ax3.set_ylim([0, ymax if np.max(totalHeatFluxArr) * 1.1 < ymax else np.max(totalHeatFluxArr) * 1.1])
 
             # Plot titles
-            ax1.set_title("Temperature and velocity field\nstep = %i, dt = %.2f, t = %.2f" % (it, dt, t[-1] - dt),
+            ax1.set_title("Temperature and velocity field\nstep = %i, dt = %.2e, t = %.2f" % (it, dt, t[-1] - dt),
                           FontSize=7)
             ax2.set_title("Maximum fluid velocity over time", FontSize=7)
             ax3.set_title("Heat fluxes over time", FontSize=7)
 
             # Plot and redo!
-            plt.savefig("fields/field%i.png" % (it / generateEvery))
+            plt.savefig("simulations/field%i.png" % (it / generateEvery))
             clrbr.remove()
             ax1.clear()
             ax2.clear()
             ax3.clear()
-        print("plotted time step:", it, end='\r')
+            print("plotted time step:", it, end='\r')
 
     # reset time level for fields
     Tn = Tnplus1
@@ -196,8 +206,8 @@ for it in range(
     # Enforcing column vector
     Tnplus1.shape = (nx * ny, 1)
     # Enforcing Dirichlet
-    Tnplus1[0::ny] = Tbottom
-    Tnplus1[ny - 1::ny] = Ttop
+    Tnplus1[0::ny] = np.expand_dims(tempDirichlet[0], 1)
+    Tnplus1[ny - 1::ny] = np.expand_dims(tempDirichlet[1], 1)
 
     # Solve for Psi n+1
     if (useSuperLUFactorizationEq1):
@@ -214,16 +224,16 @@ for it in range(
     Psinplus1[-ny:] = 0
 
 end = time.time()
-print("\nRuntime of time-marching: ", end - start, "seconds")
+print("\nRuntime of time-marching: %.2e seconds" % (end - start))
 
 # And output figure(s)
-if (generateFinal):
-    ux = grid.vecToField(dyOpPsi @ Psinplus1)
-    uy = grid.vecToField(dxOpPsi @ Psinplus1)
-    maxSpeed = np.max(np.square(ux) + np.square(uy))
-    plt.quiver(np.flipud(ux), -np.flipud(uy))
-    plt.imshow(np.flipud(grid.vecToField(Tnplus1)), cmap=plt.get_cmap('magma'))
-    plt.colorbar()
-    plt.tight_layout()
-    plt.title("Maximum speed: %.2f" % maxSpeed)
-    plt.savefig("Convection-field.png")
+# if (generateFinal):
+#     ux = grid.vecToField(dyOpPsi @ Psinplus1)
+#     uy = grid.vecToField(dxOpPsi @ Psinplus1)
+#     maxSpeed = np.max(np.square(ux) + np.square(uy))
+#     plt.quiver(np.flipud(ux), -np.flipud(uy))
+#     plt.imshow(np.flipud(grid.vecToField(Tnplus1)), cmap=plt.get_cmap('magma'))
+#     plt.colorbar()
+#     plt.tight_layout()
+#     plt.title("Maximum speed: %.2f" % maxSpeed)
+#     plt.savefig("Convection-field.png")
