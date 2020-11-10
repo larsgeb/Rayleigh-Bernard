@@ -12,11 +12,11 @@ import time
 
 # --- Setup; using the config as a 'global variable module' --- #
 config.ny = 40
-config.nx = 80
+config.nx = 120
 config.dy = 1.0 / (config.ny)
-config.dx = 2.0 / (config.nx)
-config.dt = 0.001
-config.nt = int(0.5 / config.dt)
+config.dx = 3.0 / (config.nx)
+config.dt = 0.000125
+config.nt = int(0.2 / config.dt)
 dt = config.dt
 nt = config.nt
 ny = config.ny
@@ -159,27 +159,28 @@ for it in range(
             ax2.set_xlabel("t [time]")
             ax2.set_ylabel("max V [speed]")
             ax2.set_xlim([0, nt * dt])
+            ax2.set_ylim([0.01, ax2.set_ylim()[1]])
 
             # plot heat fluxes
-            ax3.plot(t[::generateEvery], heatFluxAdvectionArr)
-            ax3.plot(t[::generateEvery], heatFluxConductionArr)
-            ax3.plot(t[::generateEvery], totalHeatFluxArr, linestyle=':')
+            ax3.semilogy(t[::generateEvery], heatFluxAdvectionArr)
+            ax3.semilogy(t[::generateEvery], heatFluxConductionArr)
+            ax3.semilogy(t[::generateEvery], totalHeatFluxArr, linestyle=':')
             ax3.legend(['Advective heat flux', 'Conductive heat flux', 'Total heat flux'], fontsize=5,
-                       loc='center left')
+                       loc='lower right')
             ax3.set_xlabel("t [time]")
             ax3.set_ylabel("q [heat flux]")
             ax3.set_xlim([0, nt * dt])
             ymax = totalHeatFluxArr[0] * 1.3
-            ax3.set_ylim([0, ymax if np.max(totalHeatFluxArr) * 1.1 < ymax else np.max(totalHeatFluxArr) * 1.1])
+            ax3.set_ylim([0.01, ymax if np.max(totalHeatFluxArr) * 1.1 < ymax else np.max(totalHeatFluxArr) * 1.1])
 
             # Plot titles
             ax1.set_title("Temperature and velocity field\nstep = %i, dt = %.2e, t = %.2f" % (it, dt, t[-1] - dt),
-                          FontSize=7)
-            ax2.set_title("Maximum fluid velocity over time", FontSize=7)
-            ax3.set_title("Heat fluxes over time", FontSize=7)
+                          fontsize=7)
+            ax2.set_title("Maximum fluid velocity over time", fontsize=7)
+            ax3.set_title("Heat fluxes over time", fontsize=7)
 
             # Plot and redo!
-            plt.savefig("simulations/field%i.png" % (it / generateEvery))
+            plt.savefig("simulations/field%05i.png" % (it / generateEvery))
             clrbr.remove()
             ax1.clear()
             ax2.clear()
